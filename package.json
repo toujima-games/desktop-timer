@@ -1,0 +1,40 @@
+{
+  "name": "desktop-timer",
+  "version": "1.0.6",
+  "description": "Compact transparent OBS timer overlay with slide settings",
+  "main": "main.js",
+  "author": "Toujima",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win nsis",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^36.9.5",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.toujima.timer",
+    "productName": "Desktop Timer",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "sound/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "createDesktopShortcut": true
+    }
+  }
+}

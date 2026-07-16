@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Desktop Timer</title>
+  <style>
+    :root {
+      --glass: rgba(7, 10, 15, 0.58);
+      --display: rgba(0, 5, 12, 0.72);
+      --button-bg: rgba(10, 16, 26, 0.76);
+      --button-hover: rgba(21, 31, 47, 0.9);
+      --button-hover-strong: rgba(21, 31, 47, 0.92);
+      --text: #eef7ff;
+      --muted: #8fa0b5;
+      --clock-color: #9ed7ff;
+      --panel-color: #070a0f;
+      --frame-color: #9bcdff;
+      --warn: #ffd59c;
+      --danger: #ff9aa2;
+      --border: rgba(155, 205, 255, 0.24);
+      --border-strong: rgba(155, 205, 255, 0.48);
+      --frame-soft: rgba(155, 205, 255, 0.08);
+      --frame-hover: rgba(155, 205, 255, 0.64);
+      --inner-line: rgba(255, 255, 255, 0.045);
+      --clock-soft: rgba(158, 215, 255, 0.12);
+      --clock-faint: rgba(158, 215, 255, 0.02);
+      --clock-glow: rgba(158, 215, 255, 0.36);
+      --surface-depth: inset 0 -7px 12px rgba(0, 0, 0, 0.11);
+      --mono: "Cascadia Mono", "Consolas", "Roboto Mono", monospace;
+      --ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --settings-width: 386px;
+      --row-gap: 6px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      min-height: 100%;
+      overflow: hidden;
+      background-color: rgba(0, 0, 0, 0) !important;
+      color: var(--text);
+      font-family: var(--ui);
+    }
+
+    body {
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-start;
+      padding: 8px;
+      user-select: none;
+    }
+
+    .overlay-shell {
+      width: fit-content;
+      max-width: none;
+      background-color: rgba(0, 0, 0, 0);
+      isolation: isolate;
+      filter: none;
+    }
+
+    .device-row {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: var(--row-gap);
+      min-height: 54px;
+      width: fit-content;
+      max-width: none;
+      padding: 7px;
+      border: 1px solid var(--border);
+      border-radius: 15px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.075), rgba(255,255,255,0.008)),
+        linear-gradient(90deg, var(--frame-soft), transparent 38%, var(--frame-soft)),
+        var(--glass);
+      box-shadow:
+        var(--surface-depth),
+        inset 0 0 0 1px var(--inner-line);
+      background-clip: padding-box;
+      -webkit-app-region: no-drag;
+      transition: border-color .14s ease, box-shadow .14s ease;
+    }
+
+    .device-row.drag-hover,
+    .device-row.window-dragging {
+      border-color: var(--frame-hover);
+      box-shadow:
+        var(--surface-depth),
+        inset 0 0 14px var(--frame-soft),
+        inset 0 0 0 1px var(--inner-line);
+    }
+
+    .drag-zone {
+      position: absolute;
+      z-index: 5;
+      cursor: grab;
+      touch-action: none;
+      -webkit-app-region: no-drag;
+    }
+
+    .drag-zone:active,
+    body.window-dragging,
+    body.window-dragging * {
+      cursor: grabbing !important;
+    }
+
+    .drag-zone-top {
+      top: 0;
+      left: 10px;
+      right: 10px;
+      height: 7px;
+    }
+
+    .drag-zone-bottom {
+      bottom: 0;
+      left: 10px;
+      right: 10px;
+      height: 7px;
+    }
+
+    .drag-zone-left {
+      top: 7px;
+      bottom: 7px;
+      left: 0;
+      width: 7px;
+    }
+
+    .drag-zone-right {
+      top: 7px;
+      right: 0;
+      bottom: 7px;
+      width: 7px;
+    }
+
+    .device-row::before {
+      content: "";
+      position: absolute;
+      inset: 5px;
+      border-radius: 11px;
+      border: 1px solid rgba(255,255,255,0.035);
+      pointer-events: none;
+    }
+
+    button,
+    input,
+    label,
+    .time-display,
+    .settings-panel,
+    .settings-panel * {
+      -webkit-app-region: no-drag;
+    }
+
+    .time-display {
+      order: 1;
+      position: relative;
+      z-index: 1;
+      width: 160px;
+      flex: 0 0 160px;
+      padding: 5px 10px 6px;
+      border: 1px solid var(--border-strong);
+      border-radius: 11px;
+      background:
+        linear-gradient(180deg, var(--clock-soft), var(--clock-faint)),
+        var(--display);
+      color: var(--clock-color);
+      cursor: pointer;
+      font-family: var(--mono);
+      font-size: 34px;
+      line-height: 1;
+      font-weight: 900;
+      letter-spacing: 0.055em;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      text-shadow: 0 0 12px var(--clock-glow);
+      transition: transform .08s ease, border-color .16s ease, box-shadow .16s ease, opacity .16s ease;
+    }
+
+    .time-display:hover {
+      border-color: var(--frame-hover);
+      box-shadow: 0 0 18px rgba(158, 215, 255, 0.12);
+    }
+
+    .time-display:active { transform: translateY(1px); }
+
+    .time-display.running::after,
+    .time-display.paused::after,
+    .time-display.finished::after {
+      content: "";
+      position: absolute;
+      right: 8px;
+      top: 8px;
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--clock-color);
+      box-shadow: 0 0 8px var(--clock-color);
+      opacity: .82;
+    }
+
+    .time-display.paused::after { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+    .time-display.finished::after { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+    button {
+      appearance: none;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--button-bg);
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 900;
+      transition: transform .08s ease, border-color .16s ease, background .16s ease, opacity .16s ease;
+    }
+
+    button:hover {
+      border-color: var(--frame-hover);
+      background: var(--button-hover);
+    }
+
+    button:active { transform: translateY(1px); }
+
+    .menu-tab {
+      order: 2;
+      position: relative;
+      z-index: 1;
+      width: 30px;
+      height: 42px;
+      flex: 0 0 30px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border-radius: 12px;
+      color: var(--clock-color);
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0;
+      line-height: 0.92;
+      outline: none;
+    }
+
+    .menu-tab:focus { outline: none; }
+
+    .menu-tab:focus-visible {
+      box-shadow: inset 0 0 0 1px var(--frame-hover);
+    }
+
+    .menu-tab span {
+      display: block;
+      text-align: center;
+      opacity: .96;
+    }
+
+    .device-row.settings-open .menu-tab {
+      border-color: var(--border-strong);
+      background: var(--button-hover-strong);
+    }
+
+    .device-row.menu-left .menu-tab {
+      border-radius: 12px;
+    }
+
+    .settings-panel {
+      order: 3;
+      flex: 0 0 0;
+      position: relative;
+      z-index: 1;
+      width: 0;
+      height: 42px;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .device-row.menu-left .settings-panel {
+      order: 1;
+    }
+
+    .device-row.menu-left:not(.settings-open):not(.settings-closing) .settings-panel {
+      margin-right: calc(-1 * var(--row-gap));
+    }
+
+    .device-row:not(.menu-left):not(.settings-open):not(.settings-closing) .settings-panel {
+      margin-left: calc(-1 * var(--row-gap));
+    }
+
+    .device-row.menu-left .time-display {
+      order: 3;
+    }
+
+    .device-row.settings-open .settings-panel,
+    .device-row.settings-closing .settings-panel {
+      flex-basis: var(--settings-width);
+      width: var(--settings-width);
+    }
+
+    .device-row.settings-open .settings-panel {
+      pointer-events: auto;
+    }
+
+    .settings-content {
+      width: max-content;
+      min-width: max-content;
+      height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      opacity: 0;
+      transform: translateX(-12px);
+      transition: opacity .16s ease, transform .18s ease;
+      will-change: opacity, transform;
+    }
+
+    .device-row.menu-left .settings-content {
+      transform: translateX(12px);
+    }
+
+    .device-row.settings-open .settings-content {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .device-row.settings-closing .settings-content {
+      opacity: 0;
+      transform: translateX(-12px);
+    }
+
+    .device-row.menu-left.settings-closing .settings-content {
+      transform: translateX(12px);
+    }
+
+    .time-editor {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      flex: 0 0 auto;
+      height: 34px;
+      padding: 3px 6px;
+      border: 1px solid var(--border-strong);
+      border-radius: 11px;
+      background:
+        linear-gradient(180deg, var(--clock-soft), var(--clock-faint)),
+        var(--display);
+    }
+
+    .time-editor input {
+      width: 35px;
+      height: 28px;
+      min-height: 28px;
+      padding: 0;
+      border: 0;
+      outline: none;
+      background: transparent;
+      color: var(--clock-color);
+      font-family: var(--mono);
+      font-size: 22px;
+      font-weight: 900;
+      text-align: center;
+      letter-spacing: 0.02em;
+      font-variant-numeric: tabular-nums;
+      text-shadow: 0 0 10px var(--clock-glow);
+    }
+
+    .time-editor span {
+      color: var(--clock-color);
+      font-family: var(--mono);
+      font-size: 21px;
+      font-weight: 900;
+      line-height: 1;
+      opacity: 0.92;
+    }
+
+    .setting-chip {
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 0 6px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--button-bg);
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 900;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .color-input {
+      appearance: none;
+      width: 23px;
+      height: 23px;
+      min-height: 23px;
+      padding: 0;
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      background: transparent;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .color-input::-webkit-color-swatch-wrapper { padding: 0; }
+    .color-input::-webkit-color-swatch {
+      border: 0;
+      border-radius: 7px;
+    }
+
+    .alarm-chip {
+      min-width: 45px;
+      cursor: pointer;
+    }
+
+    .alarm-chip input {
+      width: 16px;
+      height: 16px;
+      min-height: 16px;
+      margin: 0;
+      accent-color: var(--clock-color);
+      cursor: pointer;
+    }
+
+    .menu-side-chip {
+      width: 40px;
+      min-width: 40px;
+      padding: 0;
+      color: var(--clock-color);
+      cursor: pointer;
+      font-size: 19px;
+      line-height: 1;
+    }
+
+    .menu-side-chip span {
+      display: block;
+      transform: translateY(-1px);
+    }
+
+  </style>
+</head>
+<body>
+  <main class="overlay-shell">
+    <section id="deviceRow" class="device-row" aria-label="OBS配信用シンプルタイマー">
+      <div class="drag-zone drag-zone-top" data-drag-zone aria-hidden="true" title="ドラッグして移動"></div>
+      <div class="drag-zone drag-zone-right" data-drag-zone aria-hidden="true" title="ドラッグして移動"></div>
+      <div class="drag-zone drag-zone-bottom" data-drag-zone aria-hidden="true" title="ドラッグして移動"></div>
+      <div class="drag-zone drag-zone-left" data-drag-zone aria-hidden="true" title="ドラッグして移動"></div>
+
+      <div id="display" class="time-display" role="button" tabindex="0" aria-live="polite" title="左クリック: 再生/停止・右クリック: リセット">01:00</div>
+
+      <button id="menuBtn" class="menu-tab" type="button" aria-label="設定を開閉" aria-expanded="false" title="左クリック: 設定を開閉・右クリック: 終了">
+        <span>M<br>E<br>N<br>U</span>
+      </button>
+
+      <div id="settingsPanel" class="settings-panel" aria-label="タイマー設定">
+        <div id="settingsContent" class="settings-content">
+          <div class="time-editor" title="時分を直接入力">
+            <input id="hoursInput" type="text" inputmode="numeric" maxlength="2" aria-label="時" />
+            <span aria-hidden="true">:</span>
+            <input id="minutesInput" type="text" inputmode="numeric" maxlength="2" aria-label="分" />
+          </div>
+
+          <label class="setting-chip" title="時分色">
+            <span>時</span>
+            <input id="clockColorInput" class="color-input" type="color" aria-label="時分色" />
+          </label>
+
+          <label class="setting-chip" title="パネル色">
+            <span>板</span>
+            <input id="panelColorInput" class="color-input" type="color" aria-label="パネル色" />
+          </label>
+
+          <label class="setting-chip" title="フレーム色">
+            <span>枠</span>
+            <input id="frameColorInput" class="color-input" type="color" aria-label="フレーム色" />
+          </label>
+
+          <label class="setting-chip alarm-chip" title="アラーム音">
+            <span>♪</span>
+            <input id="alarmToggle" type="checkbox" aria-label="アラーム音オンオフ" />
+          </label>
+
+          <button id="menuSideBtn" class="setting-chip menu-side-chip" type="button" aria-label="MENUを左側へ移動" title="MENUを左側へ移動">
+            <span id="menuSideIcon" aria-hidden="true">←</span>
+          </button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = 'silent_work_timer_slide_menu_v1';
+    const LEGACY_KEYS = [
+      'silent_work_timer_minimal_obs_v2',
+      'silent_work_timer_minimal_obs_v1',
+      'silent_work_timer_obs_overlay_v1',
+      'silent_work_timer_simple_v3'
+    ];
+
+    const DEFAULT_CLOCK_COLOR = '#9ed7ff';
+    const DEFAULT_PANEL_COLOR = '#070a0f';
+    const DEFAULT_FRAME_COLOR = '#9bcdff';
+    const FALLBACK_SETTINGS_PANEL_WIDTH = 386;
+    const DISPLAY_BASE_OFFSET = 16;
+    const MENU_WIDTH = 30;
+    const ROW_GAP = 6;
+    const COMPACT_WINDOW_WIDTH = 228;
+    const MENU_ANIMATION_MS = 180;
+
+    const els = {
+      root: document.documentElement,
+      deviceRow: document.getElementById('deviceRow'),
+      dragZones: [...document.querySelectorAll('[data-drag-zone]')],
+      display: document.getElementById('display'),
+      menuBtn: document.getElementById('menuBtn'),
+      menuSideBtn: document.getElementById('menuSideBtn'),
+      menuSideIcon: document.getElementById('menuSideIcon'),
+      settingsContent: document.getElementById('settingsContent'),
+      hoursInput: document.getElementById('hoursInput'),
+      minutesInput: document.getElementById('minutesInput'),
+      clockColorInput: document.getElementById('clockColorInput'),
+      panelColorInput: document.getElementById('panelColorInput'),
+      frameColorInput: document.getElementById('frameColorInput'),
+      alarmToggle: document.getElementById('alarmToggle')
+    };
+
+    let state = loadState();
+    let timerId = null;
+    let lastTick = 0;
+    let audioContext = null;
+    let dragPointerId = null;
+    let dragZone = null;
+    let pendingDragPoint = null;
+    let dragAnimationFrame = 0;
+    let settingsPanelWidth = FALLBACK_SETTINGS_PANEL_WIDTH;
+    let menuClosing = false;
+    let menuAnimationTimer = null;
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function pad(value) {
+      return String(value).padStart(2, '0');
+    }
+
+    function toNumber(value, fallback = 0) {
+      const parsed = parseInt(value, 10);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    function sanitizeHex(value, fallback) {
+      const hex = String(value || '').trim();
+      return /^#[0-9a-f]{6}$/i.test(hex) ? hex.toLowerCase() : fallback;
+    }
+
+    function hexToRgb(hex) {
+      const safe = sanitizeHex(hex, DEFAULT_FRAME_COLOR).slice(1);
+      return {
+        r: parseInt(safe.slice(0, 2), 16),
+        g: parseInt(safe.slice(2, 4), 16),
+        b: parseInt(safe.slice(4, 6), 16)
+      };
+    }
+
+    function rgba(hex, alpha) {
+      const { r, g, b } = hexToRgb(hex);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function syncSettingsPanelWidth() {
+      const measuredWidth = Math.ceil(
+        els.settingsContent?.getBoundingClientRect().width ||
+        els.settingsContent?.scrollWidth ||
+        FALLBACK_SETTINGS_PANEL_WIDTH
+      );
+
+      settingsPanelWidth = Math.max(1, measuredWidth);
+      els.root.style.setProperty('--settings-width', `${settingsPanelWidth}px`);
+    }
+
+    function onlyTwoDigits(value) {
+      return String(value || '').replace(/\D/g, '').slice(0, 2);
+    }
+
+    function getDurationMs() {
+      return ((state.hours * 60 * 60) + (state.minutes * 60)) * 1000;
+    }
+
+    function formatMs(ms) {
+      const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+      const configuredSeconds = Math.max(0, Math.ceil(getDurationMs() / 1000));
+
+      if (state.status !== 'READY' && configuredSeconds <= 99 * 60) {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${pad(minutes)}:${pad(seconds)}`;
+      }
+
+      const totalMinutes = Math.max(0, Math.ceil(ms / 60000));
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      return `${pad(hours)}:${pad(minutes)}`;
+    }
+
+    function defaultState() {
+      return {
+        hours: 1,
+        minutes: 0,
+        remainingMs: 3600000,
+        status: 'READY',
+        menuOpen: false,
+        menuSide: 'right',
+        clockColor: DEFAULT_CLOCK_COLOR,
+        panelColor: DEFAULT_PANEL_COLOR,
+        frameColor: DEFAULT_FRAME_COLOR,
+        alarmEnabled: true
+      };
+    }
+
+    function normalizeState(raw) {
+      const parsed = JSON.parse(raw);
+
+      if (Array.isArray(parsed.items) && parsed.items.length) {
+        const currentIndex = clamp(toNumber(parsed.currentIndex, 0), 0, parsed.items.length - 1);
+        const item = parsed.items[currentIndex] || parsed.items[0];
+        const hours = clamp(toNumber(item.hours, 1), 0, 99);
+        const minutes = clamp(toNumber(item.minutes, 0), 0, 59);
+        const fallbackRemaining = ((hours * 60 * 60) + (minutes * 60)) * 1000;
+        return {
+          ...defaultState(),
+          hours,
+          minutes,
+          remainingMs: Math.max(0, toNumber(parsed.remainingMs, fallbackRemaining)),
+          status: ['READY', 'RUNNING', 'PAUSED', 'FINISHED'].includes(parsed.status) ? parsed.status : 'READY',
+          menuSide: parsed.menuSide === 'left' ? 'left' : 'right',
+          clockColor: sanitizeHex(parsed.clockColor || parsed.accentColor, DEFAULT_CLOCK_COLOR),
+          panelColor: sanitizeHex(parsed.panelColor || parsed.bgColor || parsed.backgroundColor, DEFAULT_PANEL_COLOR),
+          frameColor: sanitizeHex(parsed.frameColor || parsed.borderColor, DEFAULT_FRAME_COLOR),
+          alarmEnabled: parsed.alarmEnabled !== false && parsed.soundEnabled !== false
+        };
+      }
+
+      const hours = clamp(toNumber(parsed.hours, 1), 0, 99);
+      const minutes = clamp(toNumber(parsed.minutes, 0), 0, 59);
+      const fallbackRemaining = ((hours * 60 * 60) + (minutes * 60)) * 1000;
+
+      return {
+        ...defaultState(),
+        hours,
+        minutes,
+        remainingMs: Math.max(0, toNumber(parsed.remainingMs, fallbackRemaining)),
+        status: ['READY', 'RUNNING', 'PAUSED', 'FINISHED'].includes(parsed.status) ? parsed.status : 'READY',
+        menuSide: parsed.menuSide === 'left' ? 'left' : 'right',
+        clockColor: sanitizeHex(parsed.clockColor || parsed.accentColor, DEFAULT_CLOCK_COLOR),
+        panelColor: sanitizeHex(parsed.panelColor || parsed.bgColor || parsed.backgroundColor, DEFAULT_PANEL_COLOR),
+        frameColor: sanitizeHex(parsed.frameColor || parsed.borderColor, DEFAULT_FRAME_COLOR),
+        alarmEnabled: parsed.alarmEnabled !== false && parsed.soundEnabled !== false
+      };
+    }
+
+    function loadState() {
+      try {
+        const direct = localStorage.getItem(STORAGE_KEY);
+        if (direct) return normalizeState(direct);
+
+        for (const key of LEGACY_KEYS) {
+          const raw = localStorage.getItem(key);
+          if (raw) return normalizeState(raw);
+        }
+      } catch (error) {
+        console.error('State load failed:', error);
+      }
+
+      return defaultState();
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        hours: state.hours,
+        minutes: state.minutes,
+        remainingMs: state.remainingMs,
+        status: state.status,
+        menuSide: state.menuSide,
+        clockColor: state.clockColor,
+        panelColor: state.panelColor,
+        frameColor: state.frameColor,
+        alarmEnabled: state.alarmEnabled
+      }));
+    }
+
+    function applyTheme() {
+      const clock = sanitizeHex(state.clockColor, DEFAULT_CLOCK_COLOR);
+      const panel = sanitizeHex(state.panelColor, DEFAULT_PANEL_COLOR);
+      const frame = sanitizeHex(state.frameColor, DEFAULT_FRAME_COLOR);
+
+      state.clockColor = clock;
+      state.panelColor = panel;
+      state.frameColor = frame;
+
+      els.root.style.setProperty('--clock-color', clock);
+      els.root.style.setProperty('--panel-color', panel);
+      els.root.style.setProperty('--frame-color', frame);
+      els.root.style.setProperty('--glass', rgba(panel, 0.58));
+      els.root.style.setProperty('--display', rgba(panel, 0.72));
+      els.root.style.setProperty('--button-bg', rgba(panel, 0.76));
+      els.root.style.setProperty('--button-hover', rgba(panel, 0.9));
+      els.root.style.setProperty('--button-hover-strong', rgba(panel, 0.92));
+      els.root.style.setProperty('--border', rgba(frame, 0.24));
+      els.root.style.setProperty('--border-strong', rgba(frame, 0.52));
+      els.root.style.setProperty('--frame-soft', rgba(frame, 0.08));
+      els.root.style.setProperty('--frame-hover', rgba(frame, 0.68));
+      els.root.style.setProperty('--clock-soft', rgba(clock, 0.13));
+      els.root.style.setProperty('--clock-faint', rgba(clock, 0.025));
+      els.root.style.setProperty('--clock-glow', rgba(clock, 0.38));
+    }
+
+    function setDragHover(isHovering) {
+      if (dragPointerId !== null) return;
+      els.deviceRow.classList.toggle('drag-hover', Boolean(isHovering));
+    }
+
+    function flushWindowDrag() {
+      dragAnimationFrame = 0;
+      if (!pendingDragPoint || !window.timerWindow?.moveDrag) return;
+
+      window.timerWindow.moveDrag(
+        pendingDragPoint.screenX,
+        pendingDragPoint.screenY
+      );
+      pendingDragPoint = null;
+    }
+
+    function startWindowDrag(event) {
+      if (event.button !== 0 || !window.timerWindow?.startDrag) return;
+
+      event.preventDefault();
+      dragPointerId = event.pointerId;
+      dragZone = event.currentTarget;
+      pendingDragPoint = null;
+
+      dragZone.setPointerCapture?.(dragPointerId);
+      document.body.classList.add('window-dragging');
+      els.deviceRow.classList.remove('drag-hover');
+      els.deviceRow.classList.add('window-dragging');
+
+      window.timerWindow.startDrag(event.screenX, event.screenY);
+    }
+
+    function moveWindowDrag(event) {
+      if (event.pointerId !== dragPointerId) return;
+
+      if ((event.buttons & 1) !== 1) {
+        endWindowDrag(event);
+        return;
+      }
+
+      pendingDragPoint = {
+        screenX: event.screenX,
+        screenY: event.screenY
+      };
+
+      if (!dragAnimationFrame) {
+        dragAnimationFrame = requestAnimationFrame(flushWindowDrag);
+      }
+    }
+
+    function endWindowDrag(event) {
+      if (dragPointerId === null) return;
+      if (event?.pointerId !== undefined && event.pointerId !== dragPointerId) return;
+
+      if (dragAnimationFrame) {
+        cancelAnimationFrame(dragAnimationFrame);
+        dragAnimationFrame = 0;
+      }
+
+      if (pendingDragPoint && window.timerWindow?.moveDrag) {
+        window.timerWindow.moveDrag(
+          pendingDragPoint.screenX,
+          pendingDragPoint.screenY
+        );
+      }
+
+      pendingDragPoint = null;
+      window.timerWindow?.endDrag?.();
+
+      const releasedPointerId = dragPointerId;
+      const releasedDragZone = dragZone;
+      dragPointerId = null;
+      dragZone = null;
+
+      if (releasedDragZone && releasedPointerId !== null) {
+        try {
+          if (releasedDragZone.hasPointerCapture?.(releasedPointerId)) {
+            releasedDragZone.releasePointerCapture(releasedPointerId);
+          }
+        } catch (_error) {
+          // ドラッグ終了時にキャプチャが解除済みでも問題ありません。
+        }
+      }
+
+      document.body.classList.remove('window-dragging');
+      els.deviceRow.classList.remove('window-dragging');
+    }
+
+    function getAudioContext() {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return null;
+      audioContext ||= new AudioContextClass();
+      return audioContext;
+    }
+
+    function unlockAudio() {
+      try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+
+        const now = ctx.currentTime;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.00001, now);
+        gain.gain.setValueAtTime(0.00001, now + 0.03);
+        gain.connect(ctx.destination);
+
+        const osc = ctx.createOscillator();
+        osc.frequency.setValueAtTime(440, now);
+        osc.connect(gain);
+        osc.start(now);
+        osc.stop(now + 0.03);
+      } catch (error) {
+        console.error('Audio unlock failed:', error);
+      }
+    }
+
+    async function beep() {
+      if (!state.alarmEnabled) return;
+
+      try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        if (ctx.state === 'suspended') await ctx.resume();
+
+        const now = ctx.currentTime + 0.03;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.24, now + 0.025);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.25);
+        gain.connect(ctx.destination);
+
+        [0, 0.18, 0.36, 0.72].forEach((offset, index) => {
+          const osc = ctx.createOscillator();
+          osc.type = index === 3 ? 'triangle' : 'sine';
+          osc.frequency.setValueAtTime(index === 3 ? 660 : 980, now + offset);
+          osc.connect(gain);
+          osc.start(now + offset);
+          osc.stop(now + offset + 0.13);
+        });
+      } catch (error) {
+        console.error('Alarm beep failed:', error);
+      }
+    }
+
+
+    function measureDisplayOffsetLeft() {
+      return Math.round(els.display.getBoundingClientRect().left);
+    }
+
+    function getDisplayOffsetLeft(
+      menuOpen = state.menuOpen,
+      menuSide = state.menuSide,
+      panelWidth = settingsPanelWidth
+    ) {
+      if (menuSide !== 'left') return DISPLAY_BASE_OFFSET;
+
+      const panelOffset = menuOpen
+        ? panelWidth + ROW_GAP
+        : 0;
+
+      return DISPLAY_BASE_OFFSET + panelOffset + MENU_WIDTH + ROW_GAP;
+    }
+
+    function getWindowWidth(
+      menuOpen = state.menuOpen,
+      panelWidth = settingsPanelWidth
+    ) {
+      return COMPACT_WINDOW_WIDTH + (menuOpen ? panelWidth + ROW_GAP : 0);
+    }
+
+    function snapshotMenuLayout(panelWidth = settingsPanelWidth) {
+      return {
+        menuOpen: state.menuOpen,
+        menuSide: state.menuSide,
+        panelWidth
+      };
+    }
+
+    function notifyMenuState(
+      previousDisplayOffsetLeft = measureDisplayOffsetLeft(),
+      targetDisplayOffsetLeft = measureDisplayOffsetLeft()
+    ) {
+      if (!window.timerWindow?.setMenuOpen) return;
+
+      window.timerWindow.setMenuOpen(
+        state.menuOpen,
+        state.menuSide,
+        previousDisplayOffsetLeft,
+        targetDisplayOffsetLeft,
+        getWindowWidth()
+      );
+    }
+
+    function openMenu() {
+      if (state.menuOpen || menuClosing) return;
+
+      const previousOffset = measureDisplayOffsetLeft();
+      state.menuOpen = true;
+      render();
+
+      requestAnimationFrame(() => {
+        notifyMenuState(previousOffset, measureDisplayOffsetLeft());
+      });
+
+      setTimeout(() => {
+        if (state.menuOpen && !menuClosing) {
+          els.hoursInput.focus();
+        }
+      }, MENU_ANIMATION_MS);
+    }
+
+    function finishCloseMenu() {
+      menuAnimationTimer = null;
+
+      // While settings-closing is still active, the panel keeps its full
+      // width. Measure the real open-layout timer offset first.
+      const previousOffset = measureDisplayOffsetLeft();
+
+      menuClosing = false;
+      render();
+
+      // After the panel collapses, measure the real closed-left offset.
+      requestAnimationFrame(() => {
+        notifyMenuState(previousOffset, measureDisplayOffsetLeft());
+      });
+    }
+
+    function closeMenu() {
+      if (!state.menuOpen || menuClosing) return;
+
+      state.menuOpen = false;
+      menuClosing = true;
+      normalizeTimeInputs();
+      render();
+
+      clearTimeout(menuAnimationTimer);
+      menuAnimationTimer = setTimeout(
+        finishCloseMenu,
+        MENU_ANIMATION_MS
+      );
+    }
+
+    function toggleMenu() {
+      if (menuClosing) return;
+      state.menuOpen ? closeMenu() : openMenu();
+    }
+
+    function toggleMenuSide() {
+      if (menuClosing) return;
+
+      const previousOffset = measureDisplayOffsetLeft();
+      state.menuSide = state.menuSide === 'left' ? 'right' : 'left';
+      render();
+
+      requestAnimationFrame(() => {
+        notifyMenuState(previousOffset, measureDisplayOffsetLeft());
+      });
+    }
+
+    function render() {
+      const duration = getDurationMs();
+
+      applyTheme();
+      els.display.textContent = formatMs(state.remainingMs);
+      els.display.classList.toggle('running', state.status === 'RUNNING');
+      els.display.classList.toggle('paused', state.status === 'PAUSED');
+      els.display.classList.toggle('finished', state.status === 'FINISHED');
+      els.display.setAttribute('aria-label', state.status === 'RUNNING' ? 'タイマー停止' : 'タイマー開始');
+      els.display.style.opacity = duration <= 0 ? '0.55' : '1';
+
+      els.deviceRow.classList.toggle('settings-open', state.menuOpen);
+      els.deviceRow.classList.toggle('settings-closing', menuClosing);
+      els.deviceRow.classList.toggle('menu-left', state.menuSide === 'left');
+      els.menuBtn.setAttribute('aria-expanded', String(state.menuOpen));
+
+      const nextMenuSide = state.menuSide === 'left' ? '右' : '左';
+      const nextMenuArrow = state.menuSide === 'left' ? '→' : '←';
+      els.menuSideIcon.textContent = nextMenuArrow;
+      els.menuSideBtn.setAttribute('aria-label', `MENUを${nextMenuSide}側へ移動`);
+      els.menuSideBtn.title = `MENUを${nextMenuSide}側へ移動`;
+
+      if (document.activeElement !== els.hoursInput) els.hoursInput.value = pad(state.hours).slice(-2);
+      if (document.activeElement !== els.minutesInput) els.minutesInput.value = pad(state.minutes).slice(-2);
+      if (document.activeElement !== els.clockColorInput) els.clockColorInput.value = state.clockColor;
+      if (document.activeElement !== els.panelColorInput) els.panelColorInput.value = state.panelColor;
+      if (document.activeElement !== els.frameColorInput) els.frameColorInput.value = state.frameColor;
+      els.alarmToggle.checked = state.alarmEnabled;
+
+      saveState();
+    }
+
+    async function startTimer() {
+      const duration = getDurationMs();
+      if (duration <= 0) return;
+
+      if (state.status !== 'PAUSED') {
+        state.remainingMs = duration;
+      }
+
+      state.status = 'RUNNING';
+      lastTick = performance.now();
+      clearInterval(timerId);
+      timerId = setInterval(tick, 200);
+      render();
+    }
+
+    function stopTimer() {
+      if (state.status !== 'RUNNING') return;
+      clearInterval(timerId);
+      timerId = null;
+      state.status = 'PAUSED';
+      render();
+    }
+
+    function toggleTimer() {
+      if (state.status === 'RUNNING') {
+        stopTimer();
+      } else {
+        startTimer();
+      }
+    }
+
+    function resetTimer() {
+      clearInterval(timerId);
+      timerId = null;
+      state.remainingMs = getDurationMs();
+      state.status = 'READY';
+      render();
+    }
+
+    function finishTimer() {
+      clearInterval(timerId);
+      timerId = null;
+      state.remainingMs = 0;
+      state.status = 'FINISHED';
+      render();
+      beep();
+    }
+
+    function tick() {
+      const now = performance.now();
+      const delta = now - lastTick;
+      lastTick = now;
+      state.remainingMs = Math.max(0, state.remainingMs - delta);
+
+      if (state.remainingMs <= 0) {
+        finishTimer();
+        return;
+      }
+
+      render();
+    }
+
+    function applyTimeInputs() {
+      const hourDigits = onlyTwoDigits(els.hoursInput.value);
+      const minuteDigits = onlyTwoDigits(els.minutesInput.value);
+
+      if (els.hoursInput.value !== hourDigits) els.hoursInput.value = hourDigits;
+      if (els.minutesInput.value !== minuteDigits) els.minutesInput.value = minuteDigits;
+
+      state.hours = clamp(toNumber(hourDigits, 0), 0, 99);
+      state.minutes = clamp(toNumber(minuteDigits, 0), 0, 59);
+      state.remainingMs = getDurationMs();
+
+      if (state.status === 'RUNNING') {
+        lastTick = performance.now();
+      } else {
+        state.status = 'READY';
+      }
+
+      render();
+    }
+
+    function normalizeTimeInputs() {
+      state.hours = clamp(toNumber(els.hoursInput.value, state.hours), 0, 99);
+      state.minutes = clamp(toNumber(els.minutesInput.value, state.minutes), 0, 59);
+      els.hoursInput.value = pad(state.hours).slice(-2);
+      els.minutesInput.value = pad(state.minutes).slice(-2);
+    }
+
+    els.dragZones.forEach((zone) => {
+      zone.addEventListener('pointerenter', () => setDragHover(true));
+      zone.addEventListener('pointerleave', () => setDragHover(false));
+      zone.addEventListener('pointerdown', startWindowDrag);
+      zone.addEventListener('pointermove', moveWindowDrag);
+      zone.addEventListener('pointerup', endWindowDrag);
+      zone.addEventListener('pointercancel', endWindowDrag);
+      zone.addEventListener('lostpointercapture', endWindowDrag);
+    });
+
+    window.addEventListener('blur', () => endWindowDrag());
+    window.addEventListener('pointerup', endWindowDrag);
+
+    els.display.addEventListener('click', () => { unlockAudio(); toggleTimer(); });
+    els.display.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      resetTimer();
+    });
+    els.display.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        unlockAudio();
+        toggleTimer();
+      }
+      if (event.key === 'Backspace' || event.key === 'Delete') {
+        event.preventDefault();
+        resetTimer();
+      }
+    });
+
+    els.menuBtn.addEventListener('click', () => { unlockAudio(); toggleMenu(); });
+    els.menuBtn.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      window.timerWindow?.closeApp?.();
+    });
+    els.menuSideBtn.addEventListener('click', () => { unlockAudio(); toggleMenuSide(); });
+
+    els.hoursInput.addEventListener('input', applyTimeInputs);
+    els.minutesInput.addEventListener('input', applyTimeInputs);
+    els.hoursInput.addEventListener('blur', () => { normalizeTimeInputs(); render(); });
+    els.minutesInput.addEventListener('blur', () => { normalizeTimeInputs(); render(); });
+
+    els.clockColorInput.addEventListener('input', (event) => {
+      state.clockColor = sanitizeHex(event.target.value, DEFAULT_CLOCK_COLOR);
+      render();
+    });
+
+    els.panelColorInput.addEventListener('input', (event) => {
+      state.panelColor = sanitizeHex(event.target.value, DEFAULT_PANEL_COLOR);
+      render();
+    });
+
+    els.frameColorInput.addEventListener('input', (event) => {
+      state.frameColor = sanitizeHex(event.target.value, DEFAULT_FRAME_COLOR);
+      render();
+    });
+
+    els.alarmToggle.addEventListener('change', (event) => {
+      unlockAudio();
+      state.alarmEnabled = Boolean(event.target.checked);
+      render();
+      if (state.alarmEnabled) beep();
+    });
+
+    document.addEventListener('pointerdown', unlockAudio, { passive: true });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && state.menuOpen) {
+        event.preventDefault();
+        closeMenu();
+      }
+    });
+
+    window.addEventListener('beforeunload', () => {
+      clearTimeout(menuAnimationTimer);
+      saveState();
+    });
+
+    if (state.status === 'RUNNING') state.status = 'PAUSED';
+    if (state.remainingMs <= 0 && state.status !== 'FINISHED') state.remainingMs = getDurationMs();
+
+    syncSettingsPanelWidth();
+    render();
+    notifyMenuState(
+      measureDisplayOffsetLeft(),
+      measureDisplayOffsetLeft()
+    );
+
+    requestAnimationFrame(() => {
+      const previousWidth = settingsPanelWidth;
+      const previousOffset = measureDisplayOffsetLeft();
+      syncSettingsPanelWidth();
+
+      if (settingsPanelWidth !== previousWidth) {
+        notifyMenuState(previousOffset, measureDisplayOffsetLeft());
+      }
+    });
+  </script>
+</body>
+</html>
